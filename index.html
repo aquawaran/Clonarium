@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clone - Премиум социальная сеть</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Главный экран входа/регистрации -->
+        <div id="authScreen" class="screen active">
+            <div class="auth-background">
+                <div class="floating-shapes"></div>
+            </div>
+            
+            <div class="auth-card">
+                <div class="auth-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-infinity"></i>
+                    </div>
+                    <h1 class="logo-text">Clone</h1>
+                    <p class="logo-subtitle">Премиум социальная сеть</p>
+                </div>
+                
+                <div class="auth-forms">
+                    <!-- Форма входа -->
+                    <div id="loginForm" class="auth-form">
+                        <h2>Добро пожаловать</h2>
+                        <p class="form-subtitle">Войдите в свой аккаунт</p>
+                        <form id="loginFormElement">
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-envelope"></i>
+                                    <input type="email" id="loginEmail" placeholder="Электронная почта" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-lock"></i>
+                                    <input type="password" id="loginPassword" placeholder="Пароль" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <span>Войти</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </form>
+                        <p class="switch-form">
+                            Нет аккаунта? <a href="#" id="switchToRegister">Создать аккаунт</a>
+                        </p>
+                    </div>
+                    
+                    <!-- Форма регистрации -->
+                    <div id="registerForm" class="auth-form hidden">
+                        <h2>Создать аккаунт</h2>
+                        <p class="form-subtitle">Присоединяйтесь к Clone</p>
+                        <form id="registerFormElement">
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-user"></i>
+                                    <input type="text" id="registerName" placeholder="Ваше имя" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-at"></i>
+                                    <input type="text" id="registerUsername" placeholder="@username (минимум 4 символа)" pattern=".{4,}" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-envelope"></i>
+                                    <input type="email" id="registerEmail" placeholder="Электронная почта" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="input-group">
+                                    <i class="fas fa-lock"></i>
+                                    <input type="password" id="registerPassword" placeholder="Пароль (минимум 8 символов)" pattern=".{8,}" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <span>Создать аккаунт</span>
+                                <i class="fas fa-user-plus"></i>
+                            </button>
+                        </form>
+                        <p class="switch-form">
+                            Уже есть аккаунт? <a href="#" id="switchToLogin">Войти</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основной интерфейс приложения -->
+        <div id="mainApp" class="screen">
+            <!-- Боковая панель -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo">
+                        <div class="logo-icon">
+                            <i class="fas fa-infinity"></i>
+                        </div>
+                        <h1 class="logo-text">Clone</h1>
+                    </div>
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-screen="feed">
+                        <i class="fas fa-home"></i>
+                        <span>Лента</span>
+                    </button>
+                    <button class="nav-item" data-screen="profile">
+                        <i class="fas fa-user"></i>
+                        <span>Профиль</span>
+                    </button>
+                    <button class="nav-item" data-screen="search">
+                        <i class="fas fa-search"></i>
+                        <span>Поиск</span>
+                    </button>
+                </nav>
+                
+                <div class="sidebar-footer">
+                    <button id="themeToggle" class="theme-btn">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button id="settingsBtn" class="settings-btn">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Основной контент -->
+            <main class="main-content">
+                <!-- Верхняя панель -->
+                <header class="topbar">
+                    <div class="topbar-left">
+                        <div class="search-container">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchInput" placeholder="Поиск пользователей...">
+                        </div>
+                    </div>
+                    
+                    <div class="topbar-right">
+                        <button id="notificationsBtn" class="notification-btn">
+                            <i class="fas fa-bell"></i>
+                            <span class="notification-badge" style="display: none;">0</span>
+                        </button>
+                        <button id="profileBtn" class="profile-btn">
+                            <img id="topbarAvatar" src="" alt="Аватар" class="topbar-avatar">
+                            <div class="topbar-avatar-placeholder">😊</div>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Контент экранов -->
+                <div class="content-area">
+                    <!-- Лента -->
+                    <div id="feedScreen" class="content-screen active">
+                        <div class="feed-header">
+                            <h2>Лента</h2>
+                            <button id="refreshFeed" class="refresh-btn">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="create-post-card">
+                            <div class="create-post-header">
+                                <div class="user-avatar">
+                                    <img id="feedAvatar" src="" alt="Аватар" class="avatar-img">
+                                    <div class="avatar-placeholder">😊</div>
+                                </div>
+                                <textarea id="postContent" placeholder="Что нового? Поделитесь мыслями..."></textarea>
+                            </div>
+                            <div class="create-post-actions">
+                                <button id="attachMediaBtn" class="media-btn">
+                                    <i class="fas fa-image"></i>
+                                    <span>Фото</span>
+                                </button>
+                                <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display: none;">
+                                <button id="publishPostBtn" class="publish-btn">
+                                    <i class="fas fa-paper-plane"></i>
+                                    <span>Опубликовать</span>
+                                </button>
+                            </div>
+                            <div id="mediaPreview" class="media-preview" style="display: none;"></div>
+                        </div>
+                        
+                        <div id="postsContainer" class="posts-container">
+                            <!-- Посты будут добавляться здесь -->
+                        </div>
+                    </div>
+
+                    <!-- Профиль -->
+                    <div id="profileScreen" class="content-screen">
+                        <div class="profile-header">
+                            <div class="profile-cover">
+                                <div class="cover-gradient"></div>
+                            </div>
+                            <div class="profile-info">
+                                <div class="profile-avatar-container">
+                                    <img id="profileAvatar" src="" alt="Аватар" class="profile-avatar">
+                                    <div id="avatarPlaceholder" class="profile-avatar-placeholder">😊</div>
+                                    <button id="changeAvatarBtn" class="change-avatar-btn">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                    <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                                </div>
+                                
+                                <div class="profile-details">
+                                    <h2 id="profileName">Имя пользователя</h2>
+                                    <p id="profileUsername">@username</p>
+                                    <p id="profileBio" class="profile-bio">Описание профиля</p>
+                                    <div class="profile-stats">
+                                        <div class="stat-item">
+                                            <span class="stat-number" id="followersCount">0</span>
+                                            <span class="stat-label">подписчиков</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-number" id="followingCount">0</span>
+                                            <span class="stat-label">подписок</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-number" id="postsCount">0</span>
+                                            <span class="stat-label">постов</span>
+                                        </div>
+                                    </div>
+                                    <div class="profile-actions">
+                                        <button id="editProfileBtn" class="edit-profile-btn">
+                                            <i class="fas fa-edit"></i>
+                                            <span>Редактировать профиль</span>
+                                        </button>
+                                        <button class="follow-profile-btn" style="display: none;">
+                                            <i class="fas fa-user-plus"></i>
+                                            <span>Подписаться</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="profile-content">
+                            <div class="profile-tabs">
+                                <button class="tab-btn active" data-tab="posts">
+                                    <i class="fas fa-th"></i>
+                                    <span>Посты</span>
+                                </button>
+                                <button class="tab-btn" data-tab="media">
+                                    <i class="fas fa-images"></i>
+                                    <span>Медиа</span>
+                                </button>
+                            </div>
+                            
+                            <div class="tab-content">
+                                <div id="userPostsContainer" class="posts-container">
+                                    <!-- Посты пользователя -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Поиск -->
+                    <div id="searchScreen" class="content-screen">
+                        <div class="search-header">
+                            <h2>Поиск пользователей</h2>
+                        </div>
+                        <div id="searchResultsContainer" class="search-results">
+                            <!-- Результаты поиска -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Модальные окна -->
+        <!-- Уведомления -->
+        <div id="notificationsModal" class="modal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Уведомления</h3>
+                    <button class="close-btn" id="closeNotifications">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div id="notificationsList" class="notifications-list">
+                        <!-- Уведомления будут добавляться здесь -->
+                    </div>
+                    <button id="markAllAsReadBtn" class="mark-read-btn">
+                        <i class="fas fa-check-double"></i>
+                        <span>Отметить все как прочитанные</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Настройки -->
+        <div id="settingsModal" class="modal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Настройки</h3>
+                    <button class="close-btn" id="closeSettings">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h4>Аккаунт</h4>
+                        <div class="form-group">
+                            <label>Новая электронная почта</label>
+                            <div class="input-group">
+                                <i class="fas fa-envelope"></i>
+                                <input type="email" id="newEmail" placeholder="Email">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Новый пароль</label>
+                            <div class="input-group">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" id="newPassword" placeholder="Пароль">
+                            </div>
+                        </div>
+                        <button id="updateAccountBtn" class="btn-secondary">
+                            <i class="fas fa-save"></i>
+                            <span>Обновить данные</span>
+                        </button>
+                    </div>
+                    
+                    <div class="settings-section danger">
+                        <h4>Опасные действия</h4>
+                        <button id="logoutBtn" class="btn-danger">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Выйти из аккаунта</span>
+                        </button>
+                        <button id="deleteAccountBtn" class="btn-danger">
+                            <i class="fas fa-trash"></i>
+                            <span>Удалить аккаунт</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Редактирование профиля -->
+        <div id="editProfileModal" class="modal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Редактировать профиль</h3>
+                    <button class="close-btn" id="closeEditProfile">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Имя</label>
+                        <div class="input-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="editName" placeholder="Ваше имя">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Username</label>
+                        <div class="input-group">
+                            <i class="fas fa-at"></i>
+                            <input type="text" id="editUsername" placeholder="@username">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Описание</label>
+                        <div class="input-group">
+                            <i class="fas fa-align-left"></i>
+                            <textarea id="editBio" placeholder="Расскажите о себе"></textarea>
+                        </div>
+                    </div>
+                    <button id="saveProfileBtn" class="btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span>Сохранить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script-server.js"></script>
+</body>
+</html>
