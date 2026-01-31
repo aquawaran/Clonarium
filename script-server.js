@@ -5,11 +5,71 @@ const app = {
     posts: [],
     currentScreen: 'auth',
     theme: 'light',
-    socket: null
+    socket: null,
+    viewedUserId: null
 };
 
 // API базовый URL
 const API_URL = window.location.origin + '/api';
+
+function looksLikeId(value) {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const hex24Regex = /^[0-9a-fA-F]{24}$/;
+    const digitsRegex = /^\d+$/;
+    return uuidRegex.test(trimmed) || hex24Regex.test(trimmed) || digitsRegex.test(trimmed);
+}
+
+// Поиск пользователей
+async function handleSearch(input) {
+    const rawValue = typeof input === 'string' ? input : input?.target?.value || '';
+    const query = rawValue.trim().toLowerCase();
+    
+    if (!query) {
+        showScreen('feed');
+        return;
+    }
+    if (query.length < 2) {
+        displaySearchMessage('Введите минимум 2 символа для поиска');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(query)}`, {
+            headers: {
+                'Authorization': `Bearer ${app.token}`
+            }
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            displaySearchResults(users);
+            showScreen('search');
+        } else {
+            const data = await response.json();
+            showNotification(data.error || 'Ошибка поиска', 'error');
+        }
+    } catch (error) {
+        showNotification('Ошибка соединения с сервером', 'error');
+    }
+}
+
+function displaySearchMessage(message) {
+    const container = document.getElementById('searchResultsContainer');
+    if (container) {
+        container.innerHTML = `<p class="search-hint">${message}</p>`;
+    }
+}
+
+function resolveId(entity) {
+    if (!entity) return null;
+    if (typeof entity === 'string') {
+        return looksLikeId(entity) ? entity.trim() : null;
+    }
+    return entity.id || entity._id || entity.user_id || entity.userId || null;
+}
 
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', function() {
@@ -109,29 +169,80 @@ function setupEventListeners() {
     });
     // Навигация
     document.getElementById('feedBtn').addEventListener('click', () => showScreen('feed'));
-    document.getElementById('profileBtn').addEventListener('click', () => showScreen('profile'));
+    document.getElementById('profileBtn').addEventListener('click', () => {
+        if (app.currentUser) {
+            showUserProfile(app.currentUser);
+        } else {
+            showScreen('profile');
+        }
+    });
     
     // Посты
-    document.getElementById('publishPostBtn').addEventListener('click', createPost);
-    document.getElementById('attachMediaBtn').addEventListener('click', () => {
-        document.getElementById('mediaInput').click();
-    });
-    document.getElementById('mediaInput').addEventListener('change', handleMediaAttach);
+    const publishPostBtn = document.getElementById('publishPostBtn');
+    if (publishPostBtn) {
+        publishPostBtn.addEventListener('click', createPost);
+    }
+
+    const attachMediaBtn = document.getElementById('attachMediaBtn');
+    if (attachMediaBtn) {
+        attachMediaBtn.addEventListener('click', () => {
+            document.getElementById('mediaInput').click();
+        });
+    }
+
+    const mediaInput = document.getElementById('mediaInput');
+    if (mediaInput) {
+        mediaInput.addEventListener('change', handleMediaAttach);
+    }
     
     // Профиль
-    document.getElementById('changeAvatarBtn').addEventListener('click', () => {
-        document.getElementById('avatarInput').click();
-    });
-    document.getElementById('avatarInput').addEventListener('change', handleAvatarChange);
-    document.getElementById('editProfileBtn').addEventListener('click', openEditProfile);
-    document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
+    const changeAvatarBtn = document.getElementById('changeAvatarBtn');
+    if (changeAvatarBtn) {
+        changeAvatarBtn.addEventListener('click', () => {
+            document.getElementById('avatarInput').click();
+        });
+    }
+
+    const avatarInput = document.getElementById('avatarInput');
+    if (avatarInput) {
+        avatarInput.addEventListener('change', handleAvatarChange);
+    }
+
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    if (editProfileBtn) {
+        editProfileBtn.addEventListener('click', openEditProfile);
+    }
+
+    const saveProfileBtn = document.getElementById('saveProfileBtn');
+    if (saveProfileBtn) {
+        saveProfileBtn.addEventListener('click', saveProfile);
+    }
+
+    const followProfileBtn = document.getElementById('followProfileBtn');
+    if (followProfileBtn) {
+        followProfileBtn.addEventListener('click', () => {
+            const targetId = followProfileBtn.dataset.userId;
+            if (targetId) {
+                toggleFollow(targetId);
+            }
+        });
+    }
+
+    const saveInlineBtn = document.getElementById('saveInlineProfileBtn');
+    if (saveInlineBtn) {
+        saveInlineBtn.addEventListener('click', saveInlineProfile);
+    }
     
     // Поиск
-    document.getElementById('searchInput').addEventListener('input', handleSearch);
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', handleSearch);
+    }
     document.getElementById('searchBtn').addEventListener('click', () => {
-        const query = document.getElementById('searchInput').value.trim();
+        if (!searchInput) return;
+        const query = searchInput.value.trim();
         if (query) {
-            handleSearch({ target: { value: query } });
+            handleSearch(query);
         }
     });
     document.getElementById('refreshFeed').addEventListener('click', refreshFeed);
@@ -212,6 +323,37 @@ async function handleLogin(e) {
             }
         } else {
             showNotification(data.error || 'Ошибка входа', 'error');
+        }
+    } catch (error) {
+        showNotification('Ошибка соединения с сервером', 'error');
+    }
+}
+
+async function saveInlineProfile() {
+    const name = document.getElementById('inlineNameInput').value.trim();
+    const username = document.getElementById('inlineUsernameInput').value.trim();
+    const validationError = validateNameAndUsername(name, username);
+    if (validationError) {
+        showNotification(validationError, 'error');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${app.token}`
+            },
+            body: JSON.stringify({ name, username, bio: app.currentUser.bio })
+        });
+        if (response.ok) {
+            const data = await response.json();
+            app.currentUser = data.user;
+            updateProfileInfo();
+            showNotification('Профиль обновлен', 'success');
+        } else {
+            const data = await response.json();
+            showNotification(data.error || 'Ошибка обновления профиля', 'error');
         }
     } catch (error) {
         showNotification('Ошибка соединения с сервером', 'error');
@@ -415,10 +557,14 @@ function createPostElement(post) {
     postDiv.className = 'post';
     postDiv.dataset.postId = post.id;
     
-    const avatarHtml = post.author_avatar 
-        ? `<img src="${post.author_avatar}" alt="${post.author_name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-           <div class="avatar-placeholder" style="display:none;">😊</div>`
-        : '😊';
+    const authorId = resolveId(post.author) || post.author_id || post.authorId || post.user_id || post.userId || '';
+    const authorName = post.author_name || post.authorName || post.author?.name || 'Без имени';
+    const authorUsername = post.author_username || post.authorUsername || post.author?.username || 'user';
+    const avatarSrc = post.author_avatar || post.authorAvatar || post.author?.avatar;
+
+    const avatarHtml = avatarSrc 
+        ? `<img src="${avatarSrc}" alt="${authorName}" class="post-avatar-img">`
+        : '<div class="avatar-placeholder">😊</div>';
     
     const mediaHtml = post.media && post.media.length > 0 
         ? post.media.map(item => `
@@ -440,22 +586,24 @@ function createPostElement(post) {
                 </button>`;
     }).join('');
     
-    const commentsHtml = post.comments.map(comment => `
-        <div class="comment">
+    const commentsHtml = post.comments.map(comment => {
+        const commentId = comment.id || comment._id || '';
+        return `
+        <div class="comment" ${commentId ? `data-comment-id="${commentId}"` : ''}>
             <div class="comment-avatar">${comment.authorAvatar || '😊'}</div>
             <div class="comment-content">
                 <div class="comment-author">${comment.authorName}</div>
                 <div class="comment-text">${comment.text}</div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
     
     postDiv.innerHTML = `
         <div class="post-header">
             <div class="post-avatar">${avatarHtml}</div>
             <div class="post-info">
-                <div class="post-author" data-user-id="${post.author_id}">${post.author_name}</div>
-                <div class="post-username">@${post.author_username}</div>
+                <div class="post-author" data-user-id="${authorId}">${authorName}</div>
+                <div class="post-username">@${authorUsername}</div>
             </div>
             <div class="post-time">${formatTime(post.created_at || post.createdAt)}</div>
         </div>
@@ -473,6 +621,12 @@ function createPostElement(post) {
         </div>
     `;
     
+    const avatarImgEl = postDiv.querySelector('.post-avatar-img');
+    if (avatarImgEl) {
+        avatarImgEl.addEventListener('error', () => replaceWithAvatarFallback(avatarImgEl));
+    }
+    attachMediaFallbacks(postDiv);
+
     // Добавляем обработчики для реакций и комментариев
     postDiv.querySelectorAll('.reaction-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -485,12 +639,15 @@ function createPostElement(post) {
     // Обработчик клика на имя пользователя
     const authorElement = postDiv.querySelector('.post-author');
     if (authorElement) {
-        authorElement.addEventListener('click', () => {
-            const userId = authorElement.dataset.userId;
-            viewUserProfile(userId);
-        });
-        authorElement.style.cursor = 'pointer';
-        authorElement.style.color = 'var(--primary-color)';
+        if (authorId) {
+            authorElement.addEventListener('click', () => {
+                viewUserProfile(authorId);
+            });
+            authorElement.style.cursor = 'pointer';
+            authorElement.style.color = 'var(--primary-color)';
+        } else {
+            authorElement.style.cursor = 'default';
+        }
     }
     
     postDiv.querySelectorAll('.comment-submit-btn').forEach(btn => {
@@ -623,13 +780,20 @@ async function addComment(postId, text) {
 function addCommentToPost(postId, comment) {
     const post = app.posts.find(p => p.id === postId);
     if (post) {
+        const incomingCommentId = comment.id || comment._id || null;
+        if (incomingCommentId) {
+            const alreadyExists = post.comments.some(existing => (existing.id || existing._id) === incomingCommentId);
+            if (alreadyExists) {
+                return;
+            }
+        }
         post.comments.push(comment);
         
         const postElement = document.querySelector(`[data-post-id="${postId}"]`);
         if (postElement) {
             const commentsSection = postElement.querySelector('.comments-section');
             const commentHtml = `
-                <div class="comment">
+                <div class="comment" ${incomingCommentId ? `data-comment-id="${incomingCommentId}"` : ''}>
                     <div class="comment-avatar">${comment.authorAvatar || '😊'}</div>
                     <div class="comment-content">
                         <div class="comment-author">${comment.authorName}</div>
@@ -638,32 +802,36 @@ function addCommentToPost(postId, comment) {
                 </div>
             `;
             
-            const inputContainer = commentsSection.querySelector('.comment-input-container');
-            inputContainer.insertAdjacentHTML('beforebegin', commentHtml);
-            
-            // Очистка поля ввода
-            inputContainer.querySelector('.comment-input').value = '';
+            const existingDomNode = incomingCommentId 
+                ? commentsSection.querySelector(`.comment[data-comment-id="${incomingCommentId}"]`)
+                : null;
+            if (!existingDomNode) {
+                const inputContainer = commentsSection.querySelector('.comment-input-container');
+                inputContainer.insertAdjacentHTML('beforebegin', commentHtml);
+                
+                // Очистка поля ввода (если инициировано самим пользователем)
+                const input = inputContainer.querySelector('.comment-input');
+                if (input && document.activeElement !== input) {
+                    input.value = '';
+                }
+            }
         }
     }
 }
 
 // Загрузка постов пользователя
 async function loadUserPosts() {
-    try {
-        // В реальном приложении здесь был бы API endpoint
-        // Для демо фильтруем посты текущего пользователя
-        const userPosts = app.posts.filter(post => post.authorId === app.currentUser.id);
-        renderUserPosts(userPosts);
-    } catch (error) {
-        showNotification('Ошибка загрузки постов', 'error');
-    }
+    if (!app.currentUser) return;
+    const currentId = resolveId(app.currentUser);
+    if (!currentId) return;
+    return loadUserPostsById(currentId);
 }
 
 // Отображение постов пользователя
 function renderUserPosts(posts) {
     const container = document.getElementById('userPostsContainer');
     container.innerHTML = '';
-    
+
     if (posts.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">У вас пока нет постов</p>';
         return;
@@ -682,6 +850,7 @@ function updateProfileInfo() {
     document.getElementById('profileName').textContent = app.currentUser.name;
     document.getElementById('profileUsername').textContent = '@' + app.currentUser.username;
     document.getElementById('profileBio').textContent = app.currentUser.bio || 'Описание профиля';
+    document.getElementById('profileFollowers').textContent = app.currentUser.followersCount || 0;
     
     const avatarImg = document.getElementById('profileAvatar');
     const avatarPlaceholder = document.getElementById('avatarPlaceholder');
@@ -693,6 +862,13 @@ function updateProfileInfo() {
     } else {
         avatarImg.style.display = 'none';
         avatarPlaceholder.style.display = 'flex';
+    }
+
+    document.getElementById('inlineNameInput').value = app.currentUser.name;
+    document.getElementById('inlineUsernameInput').value = app.currentUser.username;
+    const ownerEdit = document.getElementById('profileOwnerEdit');
+    if (ownerEdit) {
+        ownerEdit.classList.remove('hidden');
     }
 }
 
@@ -777,75 +953,16 @@ async function saveProfile() {
     }
 }
 
-// Поиск пользователей
-async function handleSearch(e) {
-    const query = e.target.value.trim().toLowerCase();
-    
-    if (!query) {
-        showScreen('feed');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(query)}`, {
-            headers: {
-                'Authorization': `Bearer ${app.token}`
-            }
-        });
-        
-        if (response.ok) {
-            const users = await response.json();
-            displaySearchResults(users);
-            showScreen('search');
-        } else {
-            showNotification('Ошибка поиска', 'error');
-        }
-    } catch (error) {
-        showNotification('Ошибка соединения с сервером', 'error');
-    }
-}
-
-// ...
-
-// Отображение результатов поиска
-function displaySearchResults(users) {
-    const container = document.getElementById('searchResultsContainer');
-    container.innerHTML = '';
-    
-    if (users.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Пользователи не найдены</p>';
-        return;
-    }
-    
-    users.forEach(user => {
-        const userCard = document.createElement('div');
-        userCard.className = 'user-card';
-        userCard.onclick = () => viewUserProfile(user);
-        
-        const avatarHtml = user.avatar 
-            ? `<img src="${user.avatar}" alt="${user.name}">`
-            : '😊';
-        
-        userCard.innerHTML = `
-            <div class="user-card-avatar">${avatarHtml}</div>
-            <div class="user-card-info">
-                <div class="user-card-name">${user.name}</div>
-                <div class="user-card-username">@${user.username}</div>
-            </div>
-            <button class="follow-btn" onclick="event.stopPropagation(); toggleFollow('${user.id}')">
-                Подписаться
-            </button>
-        `;
-        
-        container.appendChild(userCard);
-    });
-}
-
 // Просмотр профиля пользователя
 async function viewUserProfile(userId) {
+    const normalizedId = resolveId(userId);
+    if (!normalizedId) {
+        showNotification('Не удалось определить пользователя', 'error');
+        return;
+    }
     try {
         // Получаем информацию о пользователе
-        const response = await fetch(`${API_URL}/users/${userId}`, {
+        const response = await fetch(`${API_URL}/users/${normalizedId}`, {
             headers: {
                 'Authorization': `Bearer ${app.token}`
             }
@@ -864,47 +981,72 @@ async function viewUserProfile(userId) {
 
 // Показ профиля пользователя
 function showUserProfile(user) {
+    const targetId = resolveId(user);
+    if (!targetId) {
+        showNotification('Не удалось открыть профиль пользователя', 'error');
+        return;
+    }
+    app.viewedUserId = targetId;
     // Обновляем информацию в профиле
-    document.getElementById('profileName').textContent = user.name;
-    document.getElementById('profileUsername').textContent = '@' + user.username;
-    document.getElementById('profileBio').textContent = user.bio || 'Описание профиля';
+    const profileNameEl = document.getElementById('profileName');
+    if (profileNameEl) profileNameEl.textContent = user.name;
+    const profileUsernameEl = document.getElementById('profileUsername');
+    if (profileUsernameEl) profileUsernameEl.textContent = '@' + user.username;
+    const profileBioEl = document.getElementById('profileBio');
+    if (profileBioEl) profileBioEl.textContent = user.bio || 'Описание профиля';
     
     const avatarImg = document.getElementById('profileAvatar');
     const avatarPlaceholder = document.getElementById('avatarPlaceholder');
     
-    if (user.avatar) {
-        avatarImg.src = user.avatar;
-        avatarImg.style.display = 'block';
-        avatarPlaceholder.style.display = 'none';
-    } else {
-        avatarImg.style.display = 'none';
-        avatarPlaceholder.style.display = 'flex';
+    if (avatarImg && avatarPlaceholder) {
+        if (user.avatar) {
+            avatarImg.src = user.avatar;
+            avatarImg.style.display = 'block';
+            avatarPlaceholder.style.display = 'none';
+        } else {
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+        }
+        avatarImg.addEventListener('error', () => {
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+        }, { once: true });
     }
     
     // Показываем количество подписчиков
     updateFollowersCount(user.followersCount || 0);
     
     // Показываем/скрываем кнопки в зависимости от чей профиль
-    const isOwnProfile = user.id === app.currentUser.id;
-    document.getElementById('editProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
-    
-    // Добавляем кнопку подписки если это чужой профиль
-    const profileHeader = document.querySelector('.profile-header');
-    const existingFollowBtn = profileHeader.querySelector('.follow-profile-btn');
-    if (existingFollowBtn) {
-        existingFollowBtn.remove();
+    const currentId = resolveId(app.currentUser);
+    const isOwnProfile = currentId && targetId === currentId;
+    const editBtn = document.getElementById('editProfileBtn');
+    if (editBtn) {
+        editBtn.style.display = isOwnProfile ? 'block' : 'none';
     }
-    
-    if (!isOwnProfile) {
-        const followBtn = document.createElement('button');
-        followBtn.className = 'follow-profile-btn';
-        followBtn.textContent = user.isFollowing ? 'Отписаться' : 'Подписаться';
-        followBtn.addEventListener('click', () => toggleFollow(user.id));
-        profileHeader.appendChild(followBtn);
+
+    const ownerEdit = document.getElementById('profileOwnerEdit');
+    if (ownerEdit) {
+        ownerEdit.classList.toggle('hidden', !isOwnProfile);
+        if (isOwnProfile) {
+            document.getElementById('inlineNameInput').value = user.name;
+            document.getElementById('inlineUsernameInput').value = user.username;
+        }
+    }
+
+    const followBtn = document.getElementById('followProfileBtn');
+    if (followBtn) {
+        if (isOwnProfile) {
+            followBtn.classList.add('hidden');
+            followBtn.dataset.userId = '';
+        } else {
+            followBtn.classList.remove('hidden');
+            followBtn.dataset.userId = targetId;
+            followBtn.textContent = user.isFollowing ? 'Отписаться' : 'Подписаться';
+        }
     }
     
     // Загружаем посты пользователя
-    loadUserPostsById(user.id);
+    loadUserPostsById(targetId);
     
     // Переключаемся на экран профиля
     showScreen('profile');
@@ -912,24 +1054,21 @@ function showUserProfile(user) {
 
 // Обновление количества подписчиков
 function updateFollowersCount(count) {
-    let followersElement = document.querySelector('.followers-count');
-    if (!followersElement) {
-        followersElement = document.createElement('div');
-        followersElement.className = 'followers-count';
-        followersElement.style.cssText = `
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-        `;
-        document.querySelector('.profile-info').appendChild(followersElement);
+    const followersElement = document.getElementById('profileFollowers');
+    if (followersElement) {
+        followersElement.textContent = count;
     }
-    followersElement.textContent = `${count} подписчиков`;
 }
 
 // Загрузка постов пользователя по ID
 async function loadUserPostsById(userId) {
+    const normalizedId = resolveId(userId);
+    if (!normalizedId) {
+        showNotification('Не удалось загрузить посты пользователя', 'error');
+        return;
+    }
     try {
-        const response = await fetch(`${API_URL}/users/${userId}/posts`, {
+        const response = await fetch(`${API_URL}/users/${normalizedId}/posts`, {
             headers: {
                 'Authorization': `Bearer ${app.token}`
             }
@@ -948,8 +1087,18 @@ async function loadUserPostsById(userId) {
 
 // Подписка/отписка
 async function toggleFollow(userId) {
+    const currentId = resolveId(app.currentUser);
+    const targetId = resolveId(userId);
+    if (!targetId) {
+        showNotification('Некорректный пользователь', 'error');
+        return;
+    }
+    if (currentId && currentId === targetId) {
+        showNotification('Невозможно подписаться на себя', 'error');
+        return;
+    }
     try {
-        const response = await fetch(`${API_URL}/users/${userId}/follow`, {
+        const response = await fetch(`${API_URL}/users/${targetId}/follow`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${app.token}`
@@ -959,6 +1108,7 @@ async function toggleFollow(userId) {
         if (response.ok) {
             const data = await response.json();
             showNotification(data.message, 'success');
+            viewUserProfile(targetId);
         } else {
             const data = await response.json();
             showNotification(data.error || 'Ошибка подписки', 'error');
@@ -1275,9 +1425,11 @@ function createMediaPreviewContainer() {
         min-height: 100px;
     `;
     
-    // Вставляем после контейнера создания поста
-    const createPost = document.querySelector('.create-post');
-    createPost.appendChild(container);
+    // Вставляем в новый composer профиля
+    const composer = document.querySelector('.profile-composer');
+    if (composer) {
+        composer.appendChild(container);
+    }
     
     return container;
 }
@@ -1462,3 +1614,35 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+function replaceWithAvatarFallback(img) {
+    if (!img) return;
+    const wrapper = img.parentElement;
+    if (!wrapper) return;
+    const fallback = document.createElement('div');
+    fallback.className = 'avatar-placeholder';
+    fallback.textContent = '😊';
+    wrapper.innerHTML = '';
+    wrapper.appendChild(fallback);
+}
+
+function attachMediaFallbacks(postElement) {
+    if (!postElement) return;
+    postElement.querySelectorAll('.post-media img').forEach(img => {
+        img.addEventListener('error', () => {
+            img.replaceWith(createMediaFallback('image'));
+        });
+    });
+    postElement.querySelectorAll('.post-media video').forEach(video => {
+        video.addEventListener('error', () => {
+            video.replaceWith(createMediaFallback('video'));
+        });
+    });
+}
+
+function createMediaFallback(type) {
+    const fallback = document.createElement('div');
+    fallback.className = 'media-fallback';
+    fallback.textContent = type === 'video' ? 'Видео недоступно' : 'Изображение недоступно';
+    return fallback;
+}
